@@ -1,230 +1,306 @@
 import os
 import re
-import glob
 import pandas as pd
+from pathlib import Path
 from datetime import datetime
 
-def encontrar_arquivos_txt(diretorio_raiz: str, palavra_chave: str) -> list:
-    """Encontra arquivos TXT contendo a palavra-chave no nome."""
-    padrao_arquivo = f'*{palavra_chave}*.txt'
-    return [os.path.join(root, arquivo) 
-            for root, _, arquivos in os.walk(diretorio_raiz) 
-            for arquivo in arquivos 
-            if arquivo.endswith('.txt') and palavra_chave.lower() in arquivo.lower()]
-
-def extrair_blocos_simulacao(conteudo: str) -> list:
-    """Divide o conteúdo em blocos de simulação individuais."""
-    # Padrão para identificar o início de cada bloco (para todos os tipos de qdisc)
-    padrao_bloco = r'(qdisc \w+ \w+:.*?)(?=\n\nqdisc|\Z)'
-    return re.findall(padrao_bloco, conteudo, re.DOTALL)
-
-def extrair_dados_pie(bloco: str) -> dict:
-    """Extrai dados específicos para qdisc pie."""
-    dados = {}
-    padroes = {
-        'sent_bytes': r'Sent (\d+) bytes',
-        'sent_pkts': r'Sent \d+ bytes (\d+) pkt',
-        'dropped': r'dropped (\d+)',
-        'overlimits': r'overlimits (\d+)',
-        'requeues': r'requeues (\d+)',
-        'backlog_bytes': r'backlog (\d+\w)',
-        'backlog_pkts': r'backlog \d+\w (\d+)p',
-        'prob': r'prob (\d+)',
-        'delay': r'delay ([\d.]+(?:us|ms))',
-        'pkts_in': r'pkts_in (\d+)',
-        'pkts_overlimit': r'overlimit (\d+)',
-        'pkts_dropped': r'dropped (\d+)',
-        'maxq': r'maxq (\d+)',
-        'ecn_mark': r'ecn_mark (\d+)',
-        'target': r'target ([\d.]+ms)',
-        'tupdate': r'tupdate ([\d.]+ms)',
-        'alpha': r'alpha (\d+)',
-        'beta': r'beta (\d+)'
-    }
-    for campo, padrao in padroes.items():
-        match = re.search(padrao, bloco)
-        if match:
-            dados[campo] = match.group(1)
-    return dados
-
-def extrair_dados_codel(bloco: str) -> dict:
-    """Extrai dados específicos para qdisc codel."""
-    dados = {}
-    padroes = {
-        'sent_bytes': r'Sent (\d+) bytes',
-        'sent_pkts': r'Sent \d+ bytes (\d+) pkt',
-        'dropped': r'dropped (\d+)',
-        'overlimits': r'overlimits (\d+)',
-        'requeues': r'requeues (\d+)',
-        'backlog_bytes': r'backlog (\d+\w)',
-        'backlog_pkts': r'backlog \d+\w (\d+)p',
-        'count': r'count (\d+)',
-        'lastcount': r'lastcount (\d+)',
-        'ldelay': r'ldelay ([\d.]+us)',
-        'drop_next': r'drop_next ([\d.]+us)',
-        'maxpacket': r'maxpacket (\d+)',
-        'ecn_mark': r'ecn_mark (\d+)',
-        'drop_overlimit': r'drop_overlimit (\d+)',
-        'target': r'target ([\d.]+ms)',
-        'interval': r'interval ([\d.]+ms)'
-    }
-    for campo, padrao in padroes.items():
-        match = re.search(padrao, bloco)
-        if match:
-            dados[campo] = match.group(1)
-    return dados
-
-def extrair_dados_dualpi2(bloco: str) -> dict:
-    """Extrai dados específicos para qdisc dualpi2."""
-    dados = {}
-    padroes = {
-        'sent_bytes': r'Sent (\d+) bytes',
-        'sent_pkts': r'Sent \d+ bytes (\d+) pkt',
-        'dropped': r'dropped (\d+)',
-        'overlimits': r'overlimits (\d+)',
-        'requeues': r'requeues (\d+)',
-        'backlog_bytes': r'backlog (\d+\w)',
-        'backlog_pkts': r'backlog \d+\w (\d+)p',
-        'prob': r'prob ([\d.]+)',
-        'delay_c': r'delay_c ([\d.]+us)',
-        'delay_l': r'delay_l ([\d.]+us)',
-        'pkts_in_c': r'pkts_in_c (\d+)',
-        'pkts_in_l': r'pkts_in_l (\d+)',
-        'maxq': r'maxq (\d+)',
-        'ecn_mark': r'ecn_mark (\d+)',
-        'step_marks': r'step_marks (\d+)',
-        'credit': r'credit (-?\d+)',
-        'target': r'target ([\d.]+ms)',
-        'tupdate': r'tupdate ([\d.]+ms)',
-        'alpha': r'alpha ([\d.]+)',
-        'beta': r'beta ([\d.]+)',
-        'coupling_factor': r'coupling_factor (\d+)'
-    }
-    for campo, padrao in padroes.items():
-        match = re.search(padrao, bloco)
-        if match:
-            dados[campo] = match.group(1)
-    return dados
-
-def extrair_dados_fq_codel(bloco: str) -> dict:
-    """Extrai dados específicos para qdisc fq_codel."""
-    dados = {}
-    padroes = {
-        'sent_bytes': r'Sent (\d+) bytes',
-        'sent_pkts': r'Sent \d+ bytes (\d+) pkt',
-        'dropped': r'dropped (\d+)',
-        'overlimits': r'overlimits (\d+)',
-        'requeues': r'requeues (\d+)',
-        'backlog_bytes': r'backlog (\d+\w)',
-        'backlog_pkts': r'backlog \d+\w (\d+)p',
-        'maxpacket': r'maxpacket (\d+)',
-        'drop_overlimit': r'drop_overlimit (\d+)',
-        'new_flow_count': r'new_flow_count (\d+)',
-        'ecn_mark': r'ecn_mark (\d+)',
-        'new_flows_len': r'new_flows_len (\d+)',
-        'old_flows_len': r'old_flows_len (\d+)',
-        'target': r'target ([\d.]+ms)',
-        'interval': r'interval ([\d.]+ms)',
-        'quantum': r'quantum (\d+)',
-        'memory_limit': r'memory_limit (\d+\w+)',
-        'drop_batch': r'drop_batch (\d+)'
-    }
-    for campo, padrao in padroes.items():
-        match = re.search(padrao, bloco)
-        if match:
-            dados[campo] = match.group(1)
-    return dados
-
-def extrair_dados_bloco(bloco: str, arquivo_origem: str, indice: int) -> dict:
-    """Extrai dados de um bloco de simulação, identificando o tipo de qdisc."""
-    # Identifica o tipo de qdisc
-    tipo_match = re.match(r'qdisc (\w+)', bloco)
-    if not tipo_match:
-        return None
-    
-    tipo_qdisc = tipo_match.group(1).lower()
-    dados = {
-        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'arquivo_origem': arquivo_origem,
-        'simulacao_id': indice + 1,
-        'qdisc_type': tipo_qdisc
-    }
-    
-    # Extrai dados específicos para cada tipo de qdisc
-    if tipo_qdisc == 'pie':
-        dados.update(extrair_dados_pie(bloco))
-    elif tipo_qdisc == 'codel':
-        dados.update(extrair_dados_codel(bloco))
-    elif tipo_qdisc == 'dualpi2':
-        dados.update(extrair_dados_dualpi2(bloco))
-    elif tipo_qdisc == 'fq_codel':
-        dados.update(extrair_dados_fq_codel(bloco))
-    else:
-        print(f"Tipo de qdisc não suportado: {tipo_qdisc}")
-        return None
-    
-    return dados
-
-def processar_arquivo(caminho_arquivo: str) -> list:
-    """Processa um arquivo completo e retorna todos os blocos de dados."""
-    with open(caminho_arquivo, 'r') as f:
-        conteudo = f.read()
-        blocos = extrair_blocos_simulacao(conteudo)
-        nome_arquivo = os.path.basename(caminho_arquivo)
-        resultados = []
+class NetworkSimulationProcessor:
+    def __init__(self, simulation_path):
+        self.sim_dir = Path(simulation_path)
+        if not self.sim_dir.exists():
+            raise FileNotFoundError(f"Directory not found: {simulation_path}")
         
-        for i, bloco in enumerate(blocos):
-            dados = extrair_dados_bloco(bloco, nome_arquivo, i)
-            if dados:
-                resultados.append(dados)
+        self.sim_id = self.sim_dir.name
+        self.results = []
+        self.valid_qdisc_types = ['pie', 'codel', 'dualpi2', 'fq_codel']
         
-        return resultados
+    @staticmethod
+    def _convert_units(value, unit):
+        """Convert storage units to bytes"""
+        unit = unit.lower()
+        conversions = {
+            'kib': 1024,
+            'mib': 1024**2,
+            'gib': 1024**3,
+            'tib': 1024**4
+        }
+        return value * conversions.get(unit, 1)
 
-def gerar_dataframe(dados_coletados: list) -> pd.DataFrame:
-    """Cria um DataFrame pandas com os dados coletados."""
-    return pd.DataFrame(dados_coletados)
+    @staticmethod
+    def _convert_time(time_str):
+        """Convert time units to nanoseconds"""
+        if not time_str:
+            return 0
+        if 'us' in time_str:
+            return float(time_str.replace('us', '')) * 1000
+        elif 'ms' in time_str:
+            return float(time_str.replace('ms', '')) * 1e6
+        return float(time_str)
+
+    def _extract_metric(self, content, pattern, convert_func=None):
+        """Generic metric extractor with optional conversion"""
+        match = re.search(pattern, content)
+        if not match:
+            return None
+        value = match.group(1)
+        return convert_func(value) if convert_func else value
+
+    def _parse_common_metrics(self, content):
+        """Extract metrics common to all qdisc types"""
+        common_metrics = {
+            'sent_bytes': (r'Sent (\d+) bytes', int),
+            'sent_pkts': (r'Sent \d+ bytes (\d+) pkt', int),
+            'dropped': (r'dropped (\d+)', int),
+            'overlimits': (r'overlimits (\d+)', int),
+            'requeues': (r'requeues (\d+)', int),
+            'backlog_bytes': (r'backlog (\d+)b', int),
+            'backlog_pkts': (r'backlog \d+b (\d+)p', int)
+        }
+        
+        return {
+            field: self._extract_metric(content, pattern, conv)
+            for field, (pattern, conv) in common_metrics.items()
+        }
+
+    def _parse_pie_metrics(self, content):
+        """Extract PIE-specific metrics"""
+        pie_metrics = {
+            'prob': (r'prob (\d+)', float),
+            'delay': (r'delay ([\d.]+(?:us|ms))', self._convert_time),
+            'pkts_in': (r'pkts_in (\d+)', int),
+            'pkts_overlimit': (r'overlimit (\d+)', int),
+            'maxq': (r'maxq (\d+)', int),
+            'ecn_mark': (r'ecn_mark (\d+)', int),
+            'target': (r'target ([\d.]+ms)', self._convert_time),
+            'tupdate': (r'tupdate ([\d.]+ms)', self._convert_time),
+            'alpha': (r'alpha (\d+)', int),
+            'beta': (r'beta (\d+)', int)
+        }
+        
+        return {
+            field: self._extract_metric(content, pattern, conv)
+            for field, (pattern, conv) in pie_metrics.items()
+        }
+
+    def _parse_codel_metrics(self, content):
+        """Extract CoDel-specific metrics"""
+        codel_metrics = {
+            'count': (r'count (\d+)', int),
+            'lastcount': (r'lastcount (\d+)', int),
+            'ldelay': (r'ldelay ([\d.]+us)', self._convert_time),
+            'drop_next': (r'drop_next ([\d.]+us)', self._convert_time),
+            'maxpacket': (r'maxpacket (\d+)', int),
+            'ecn_mark': (r'ecn_mark (\d+)', int),
+            'drop_overlimit': (r'drop_overlimit (\d+)', int),
+            'target': (r'target ([\d.]+ms)', self._convert_time),
+            'interval': (r'interval ([\d.]+ms)', self._convert_time)
+        }
+        
+        return {
+            field: self._extract_metric(content, pattern, conv)
+            for field, (pattern, conv) in codel_metrics.items()
+        }
+
+    def _parse_dualpi2_metrics(self, content):
+        """Extract DualPI2-specific metrics"""
+        dualpi2_metrics = {
+            'prob': (r'prob ([\d.]+)', float),
+            'delay_c': (r'delay_c ([\d.]+us)', self._convert_time),
+            'delay_l': (r'delay_l ([\d.]+us)', self._convert_time),
+            'pkts_in_c': (r'pkts_in_c (\d+)', int),
+            'pkts_in_l': (r'pkts_in_l (\d+)', int),
+            'maxq': (r'maxq (\d+)', int),
+            'ecn_mark': (r'ecn_mark (\d+)', int),
+            'step_marks': (r'step_marks (\d+)', int),
+            'credit': (r'credit (-?\d+)', int),
+            'target': (r'target ([\d.]+ms)', self._convert_time),
+            'tupdate': (r'tupdate ([\d.]+ms)', self._convert_time),
+            'alpha': (r'alpha ([\d.]+)', float),
+            'beta': (r'beta ([\d.]+)', float),
+            'coupling_factor': (r'coupling_factor (\d+)', int)
+        }
+        
+        return {
+            field: self._extract_metric(content, pattern, conv)
+            for field, (pattern, conv) in dualpi2_metrics.items()
+        }
+
+    def _parse_fq_codel_metrics(self, content):
+        """Extract FQ_CoDel-specific metrics"""
+        fq_codel_metrics = {
+            'maxpacket': (r'maxpacket (\d+)', int),
+            'drop_overlimit': (r'drop_overlimit (\d+)', int),
+            'new_flow_count': (r'new_flow_count (\d+)', int),
+            'ecn_mark': (r'ecn_mark (\d+)', int),
+            'new_flows_len': (r'new_flows_len (\d+)', int),
+            'old_flows_len': (r'old_flows_len (\d+)', int),
+            'target': (r'target ([\d.]+ms)', self._convert_time),
+            'interval': (r'interval ([\d.]+ms)', self._convert_time),
+            'quantum': (r'quantum (\d+)', int),
+            'memory_limit': (r'memory_limit (\d+\w+)', lambda x: self._convert_units(float(x[:-1]), x[-1:])),
+            'drop_batch': (r'drop_batch (\d+)', int)
+        }
+        
+        return {
+            field: self._extract_metric(content, pattern, conv)
+            for field, (pattern, conv) in fq_codel_metrics.items()
+        }
+
+    def _parse_qdisc_content(self, content):
+        """Parse qdisc content and return metrics"""
+        qdisc_match = re.match(r'qdisc (\w+)', content)
+        if not qdisc_match:
+            return None
+            
+        qdisc_type = qdisc_match.group(1).lower()
+        if qdisc_type not in self.valid_qdisc_types:
+            return None
+
+        metrics = {
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'qdisc_type': qdisc_type,
+            **self._parse_common_metrics(content)
+        }
+
+        # Add type-specific metrics
+        if qdisc_type == 'pie':
+            metrics.update(self._parse_pie_metrics(content))
+        elif qdisc_type == 'codel':
+            metrics.update(self._parse_codel_metrics(content))
+        elif qdisc_type == 'dualpi2':
+            metrics.update(self._parse_dualpi2_metrics(content))
+        elif qdisc_type == 'fq_codel':
+            metrics.update(self._parse_fq_codel_metrics(content))
+
+        return metrics
+
+    def _parse_throughput_log(self, content):
+        """Parse throughput log content"""
+        pattern = (
+            r'\*\*\* Download Progress Summary as of (.*?) \*\*\*.*?'
+            r'\[#\w+ (\d+\.?\d*)([KMGT]?iB)/(\d+\.?\d*)([KMGT]?iB).*?'
+            r'DL:(\d+\.?\d*)([KMGT]?iB)'
+        )
+        matches = re.findall(pattern, content, re.DOTALL)
+        
+        throughput_data = []
+        for match in matches:
+            throughput_data.append({
+                'timestamp': datetime.strptime(match[0], '%a %b %d %H:%M:%S %Y'),
+                'downloaded_bytes': self._convert_units(float(match[1]), match[2]),
+                'total_size_bytes': self._convert_units(float(match[3]), match[4]),
+                'throughput_bps': self._convert_units(float(match[5]), match[6]) * 8,
+                'progress_pct': (float(match[1]) / float(match[3])) * 100 if float(match[3]) > 0 else 0
+            })
+        return throughput_data
+
+    def _process_qdisc_files(self):
+        """Process all qdisc files for the simulation"""
+        interfaces = ['eth1', 'eth7']
+        roles = ['client', 'server']
+        
+        for role in roles:
+            for interface in interfaces:
+                file_path = self.sim_dir / role / f"{self.sim_id}_Router_Queue_Size_{role}_{interface}.txt"
+                if not file_path.exists():
+                    print(f"Warning: File not found - {file_path}")
+                    continue
+                
+                with open(file_path, 'r') as f:
+                    content = f.read()
+                    for block in content.split('qdisc')[1:]:
+                        metrics = self._parse_qdisc_content('qdisc' + block)
+                        if metrics:
+                            metrics.update({
+                                'test_id': self.sim_id,
+                                'data_source': 'qdisc',
+                                'origin': role,
+                                'interface': interface,
+                                'metric_type': 'queue_metrics'
+                            })
+                            self.results.append(metrics)
+
+    def _process_throughput_logs(self):
+        """Process throughput logs for the simulation"""
+        log_sources = {
+            'client_dos': self.sim_dir / 'output_client_2',
+            'client_juan': self.sim_dir / 'output_client_juan'
+        }
+        
+        for origin, log_dir in log_sources.items():
+            if not log_dir.exists():
+                print(f"Warning: Log directory not found - {log_dir}")
+                continue
+                
+            for log_file in log_dir.glob(f"F-Stack_Client-{origin.split('_')[-1].capitalize()}_*_{self.sim_id}.txt"):
+                with open(log_file, 'r') as f:
+                    content = f.read()
+                    for metrics in self._parse_throughput_log(content):
+                        metrics.update({
+                            'test_id': self.sim_id,
+                            'data_source': 'fstack',
+                            'origin': origin,
+                            'interface': 'N/A',
+                            'metric_type': 'throughput',
+                            'qdisc_type': 'N/A'
+                        })
+                        self.results.append(metrics)
+
+    def process(self):
+        """Main processing method"""
+        print(f"\nStarting processing for simulation: {self.sim_id}")
+        
+        self._process_qdisc_files()
+        self._process_throughput_logs()
+        
+        if not self.results:
+            print("Warning: No data was processed")
+            return False
+            
+        return True
+
+    def save_results(self, output_dir=None):
+        """Save processed results to CSV"""
+        if not self.results:
+            print("Error: No results to save")
+            return None
+            
+        df = pd.DataFrame(self.results)
+        
+        # Ensure consistent column order
+        base_columns = [
+            'test_id', 'timestamp', 'data_source', 'origin', 
+            'interface', 'metric_type', 'qdisc_type'
+        ]
+        other_columns = [col for col in df.columns if col not in base_columns]
+        df = df[base_columns + other_columns]
+        
+        output_path = Path(output_dir or self.sim_dir) / f"{self.sim_id}_metrics.csv"
+        df.to_csv(output_path, index=False)
+        
+        print(f"\nResults saved to: {output_path}")
+        return output_path
 
 def main():
-    print("=== Script de Extração de Dados de Vários Tipos de Qdisc ===")
+    print("=== Network Simulation Data Processor ===")
     
-    diretorio = input("Diretório raiz: ").strip()
-    palavra_chave = input("Palavra-chave para buscar nos arquivos: ").strip()
-    
-    if not os.path.isdir(diretorio):
-        print("Diretório inválido!")
-        return
-    
-    arquivos = encontrar_arquivos_txt(diretorio, palavra_chave)
-    if not arquivos:
-        print("Nenhum arquivo encontrado!")
-        return
-    
-    print(f"\n{len(arquivos)} arquivo(s) encontrado(s):")
-    for arq in arquivos:
-        print(f"- {arq}")
-    
-    todos_dados = []
-    for arquivo in arquivos:
-        dados = processar_arquivo(arquivo)
-        todos_dados.extend(dados)
-        print(f"Processado: {arquivo} - {len(dados)} blocos")
-    
-    if not todos_dados:
-        print("Nenhum dado para exportar!")
-        return
-    
-    df = pd.DataFrame(todos_dados)
-    
-    # Reorganiza as colunas para colocar o tipo de qdisc no início
-    colunas = ['timestamp', 'arquivo_origem', 'simulacao_id', 'qdisc_type'] + [c for c in df.columns if c not in ['timestamp', 'arquivo_origem', 'simulacao_id', 'qdisc_type']]
-    df = df[colunas]
-    
-    csv_path = os.path.join(diretorio, f"resultados_qdisc_{palavra_chave}.csv")
-    df.to_csv(csv_path, index=False)
-    
-    print(f"\nCSV gerado com sucesso: {csv_path}")
-    print(f"Total de simulações processadas: {len(df)}")
-    print(f"Tipos de qdisc encontrados: {df['qdisc_type'].unique()}")
+    while True:
+        sim_path = input("\nEnter full simulation path (or 'quit' to exit): ").strip()
+        if sim_path.lower() in ('quit', 'exit'):
+            break
+            
+        try:
+            processor = NetworkSimulationProcessor(sim_path)
+            if processor.process():
+                output_file = processor.save_results()
+                print(f"\nSuccessfully processed simulation {processor.sim_id}")
+                print(f"Output file: {output_file}")
+        except Exception as e:
+            print(f"\nError processing simulation: {str(e)}")
+            print("Please check:")
+            print(f"1. The path exists: {sim_path}")
+            print("2. The directory contains the expected files")
+            print("3. You have proper read permissions")
 
 if __name__ == "__main__":
     main()
